@@ -73,16 +73,22 @@ jobs:
           grep -q -- '-> verified' /tmp/det.txt \
             || { echo "::error::a deterministic command did not verify"; exit 1; }
 
-      # DEC-008: pytest prints a duration, so its output digest differs on every run. An identical
-      # exit status with differing output is `unverifiable` -- re-execution neither confirmed nor
-      # refuted the result. Reporting `contradicted` there would tell an operator that a passing,
-      # unchanged suite had failed verification, which is how this decision was found.
+      # DEC-008: an identical exit status with differing output is `unverifiable` -- re-execution
+      # neither confirmed nor refuted the result. Reporting `contradicted` there would tell an
+      # operator that a passing, unchanged command had failed verification, which is how the
+      # decision was found: the first version of this step recorded `pytest`, whose printed
+      # duration usually varies.
+      #
+      # `pytest` is the wrong command to assert it with. Its duration is incidentally variable, not
+      # reliably so -- on this runner it rounded identically across both runs and the step failed
+      # by verifying. `date +%s%N` differs every time by construction, so the assertion tests the
+      # semantics rather than the timing of the machine it runs on.
       - name: a nondeterministic command is unverifiable, not contradicted
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           set -euo pipefail
-          uv run attestrun record --command "uv run pytest -q" --input 'src/**/*.py' \
-            --claim "attestrun's own suite passes over these sources." --out /tmp/self.json
+          uv run attestrun record --command "date +%s%N" --input 'src/**/*.py' \
+            --claim "the clock reported this value." --out /tmp/self.json
           uv run attestrun verify /tmp/self.json | tee /tmp/nd.txt || true
           grep -q -- '-> unverifiable' /tmp/nd.txt \
             || { echo "::error::a nondeterministic command did not report unverifiable"; exit 1; }
