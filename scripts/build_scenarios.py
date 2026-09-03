@@ -50,7 +50,18 @@ def main() -> int:
         scenario.mkdir(parents=True, exist_ok=True)
         build_tree(tree)
         manifest = record(tree, "sh runner.sh", PATTERNS, f"the {slug} scenario's command ran.")
-        (scenario / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+
+        # Preserve `recorded_at` when nothing else changed. It is the one field that moves on every
+        # rebuild, and letting it move makes the corpus non-reproducible -- which in turn makes a
+        # `git diff --exit-code` check in CI useless, because it would fail on every run whether or
+        # not a manifest had genuinely drifted from its tree.
+        path = scenario / "manifest.json"
+        if path.exists():
+            previous = json.loads(path.read_text())
+            comparable = dict(manifest, recorded_at=previous.get("recorded_at"))
+            if comparable == previous:
+                manifest = previous
+        path.write_text(json.dumps(manifest, indent=2) + "\n")
         (scenario / "mutate.sh").write_text(mutation)
         print(
             f"  {slug}: {len(manifest['inputs'])} inputs, exit {manifest['result']['exit_status']}"

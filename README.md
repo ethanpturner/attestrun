@@ -5,10 +5,16 @@ into a signed-shaped manifest and re-derives the claim from it offline. Cryptogr
 deferred (DEC-006).
 
 ```
-uv run attestrun record --command "whence evaluate" --workdir ../whence --out run.json
-uv run attestrun verify run.json --workdir ../whence
-uv run attestrun evaluate        # every benchmark scenario, offline
+uv run attestrun evaluate                       # every benchmark scenario, offline
+uv run attestrun record --command "uv run pytest -q" --out run.json
+uv run attestrun verify run.json
 ```
+
+The record example deliberately uses a command that exists in this repository. An earlier version
+attested `whence evaluate` against a sibling checkout, which reports `exit status : 127` when the
+sibling is absent or not on `PATH` — success-shaped output for a command that never ran. Attesting
+a sibling is a real use (this project's CI does it), and it needs the sibling present and the
+command runnable there.
 
 ## The problem
 
@@ -33,7 +39,7 @@ Takes a command that produces an evaluation result, and emits a **run manifest**
 
 - every input file's content digest, resolved from a declared input set
 - the exact command, its exit status, and its output
-- the tool's own version and the environment facts that change results
+- the interpreter version and platform, recorded as advisory context and never compared
 - a claim — what the run is asserted to show
 
 `attestrun verify` re-executes against the same digests and reports `verified`, `contradicted`, or
@@ -58,7 +64,8 @@ different and much stronger claim, and the manifest says which one it is making 
 
 ## How it is evaluated
 
-Seven scenarios, one per mutation class, and a coverage rule: **every verdict must be produced by
+Seven scenarios — five mutation classes plus an unmutated baseline and the bound below — and a
+coverage rule: **every verdict must be produced by
 at least one of them**. A verification tool that has only ever returned `verified` has not been
 tested, and that is the most likely way this project ships broken and looks fine.
 
@@ -68,8 +75,7 @@ defect. It is the bound DEC-007 states, pinned so it cannot be quietly forgotten
 
 ## Lineage
 
-The three-valued verdict is adopted from [`whence`](https://github.com/ethanpturner/whence) rather
-than reinvented here; `whence` and [`tearline`](https://github.com/ethanpturner/tearline) are its
+The three-valued verdict is defined here for this project's own output; `whence` and [`tearline`](https://github.com/ethanpturner/tearline) are its
 first intended consumers. All three descend from
 [`trace`](https://github.com/ethanpturner/trace)'s DEC-009: a finding means evidence supports a
 weakness, a documentation gap means it could not be determined whether a control exists, and

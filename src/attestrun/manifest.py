@@ -94,8 +94,31 @@ def record(workdir: Path, command: str, patterns: list[str], claim: str) -> dict
 def verify(manifest: dict[str, Any], workdir: Path, *, rerun: bool = True) -> Verification:
     result = Verification(manifest_path=str(workdir))
 
-    for entry in manifest.get("inputs") or []:
+    recorded = manifest.get("inputs") or []
+    if not recorded:
+        # `Verdict.combine` decides that nothing checked is not a pass, and `verify` used to route
+        # around it by always appending the result verdict. A manifest whose glob matched nothing --
+        # which is what a typo in `--input` produces -- would then report `verified` over an empty
+        # digest chain (DEC-004).
+        result.inputs.append(
+            InputCheck("(no inputs)", Verdict.UNVERIFIABLE, "the manifest records no inputs")
+        )
+
+    for entry in recorded:
         path = workdir / str(entry["path"])
+        if entry.get("sha256") is None:
+            # Recorded as unreadable at record time. `data-model.md` §5 says a synthetic value
+            # would compare unequal and report `contradicted` for a file that was simply
+            # unreadable -- and `None` compared unequal, which is the same defect the rule was
+            # written against. Nothing was ever digested, so nothing can be contradicted.
+            result.inputs.append(
+                InputCheck(
+                    entry["path"],
+                    Verdict.UNVERIFIABLE,
+                    "no digest was recorded; the file was unreadable when the manifest was made",
+                )
+            )
+            continue
         actual = digest_file(path)
         if actual is None:
             # DEC-004: unreadable is not evidence the claim is false.
@@ -112,6 +135,22 @@ def verify(manifest: dict[str, Any], workdir: Path, *, rerun: bool = True) -> Ve
             )
         else:
             result.inputs.append(InputCheck(entry["path"], Verdict.VERIFIED, "digest matches"))
+
+    # DEC-007 bounds coverage by the declared globs. The recorded list bounds it more narrowly --
+    # by the files that existed at record time -- so a file added afterwards that the globs DO
+    # cover would otherwise pass unnoticed. Re-globbing closes the gap between the stated bound and
+    # the implemented one.
+    patterns = [str(p) for p in (manifest.get("input_patterns") or [])]
+    known = {str(entry["path"]) for entry in recorded}
+    for entry in collect_inputs(workdir, patterns):
+        if str(entry["path"]) not in known:
+            result.inputs.append(
+                InputCheck(
+                    str(entry["path"]),
+                    Verdict.CONTRADICTED,
+                    "matches a declared input pattern and was not present when the manifest was made",
+                )
+            )
 
     if not rerun:
         result.result_verdict = Verdict.UNVERIFIABLE

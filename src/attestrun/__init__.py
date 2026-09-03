@@ -4,13 +4,28 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from attestrun.evaluate import coverage, score_scenario
 from attestrun.manifest import load, record, verify
 from attestrun.verdict import Verdict
 
-ROOT = Path(__file__).resolve().parent.parent.parent
+
+def _repo_root() -> Path:
+    """The checkout this package runs from.
+
+    `parent.parent.parent` is the repository only for a source checkout; from a wheel in
+    site-packages it points into the virtualenv, and `evaluate` -- a command the README documents --
+    raised FileNotFoundError. Walk up for the marker instead.
+    """
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "benchmarks" / "scenarios.yaml").exists():
+            return candidate
+    return Path.cwd()
+
+
+ROOT = _repo_root()
 
 DEFAULT_PATTERNS = ["benchmarks/**/*.yaml", "benchmarks/**/*.json", "src/**/*.py"]
 
@@ -43,6 +58,17 @@ def _cmd_verify(args: argparse.Namespace) -> int:
         f"{counts[Verdict.CONTRADICTED]} contradicted, {counts[Verdict.UNVERIFIABLE]} unverifiable"
     )
     print(f"  result: {result.result_verdict.value} — {result.result_detail}")
+
+    # DEC-007: coverage is bounded by the declared globs and the tool says so. The patterns were
+    # recorded and never shown, leaving the most-argued decision in the log with no output surface:
+    # a reader had to infer completeness rather than read the bound.
+    patterns = manifest.get("input_patterns") or []
+    shown = ", ".join(str(p) for p in patterns) if patterns else "(no patterns recorded)"
+    print(f"\n  coverage is bounded by: {shown}")
+    print("  anything outside those patterns was not examined")
+    if scope := manifest.get("scope"):
+        print(f"  scope: {scope}")
+
     print(f"\n{manifest.get('claim', '(no claim recorded)')}")
     print(f"  -> {result.overall.value}")
     return 0 if result.overall is Verdict.VERIFIED else 1
@@ -67,20 +93,43 @@ def _registry() -> list[dict[str, str]]:
 
 
 def _cmd_evaluate(args: argparse.Namespace) -> int:
+    registry = ROOT / "benchmarks" / "scenarios.yaml"
+    if not registry.exists():
+        print(
+            f"no scenario registry at {registry}. `attestrun evaluate` scores this project's own "
+            f"corpus and needs a source checkout; it is not available from an installed package.",
+            file=sys.stderr,
+        )
+        return 2
+
     entries = _registry()
     failed = 0
+    observed: list[str] = []
     for entry in entries:
         result = score_scenario(ROOT / entry["path"], entry["slug"])
-        if result.passed:
-            print(f"ok    {entry['slug']}  ({entry['expects']})")
-        else:
+        observed.append(result.observed_overall)
+        if not result.passed:
+            # Report the scenario's own problems first. Otherwise a scenario that failed before
+            # producing a verdict -- a failed mutation, say -- is reported as a registry
+            # disagreement with an empty verdict, which names the wrong thing.
             failed += 1
             print(f"FAIL  {entry['slug']}")
             for problem in result.problems:
                 print(f"        {problem}")
+        elif result.observed_overall != entry.get("expects"):
+            failed += 1
+            print(
+                f"FAIL  {entry['slug']}: the registry declares `expects: {entry.get('expects')}` "
+                f"and the scenario produced `{result.observed_overall}`"
+            )
+        else:
+            print(f"ok    {entry['slug']}  ({result.observed_overall})")
 
-    # A verification tool that has only ever returned `verified` has not been tested.
-    missing = coverage([e["expects"] for e in entries])
+    # A verification tool that has only ever returned `verified` has not been tested. Scored from
+    # the verdicts the tool ACTUALLY produced: scoring the registry's declared strings would check a
+    # list of words in a YAML file against itself, which is the failure the evaluation plan names as
+    # the most likely way this ships broken.
+    missing = coverage(observed)
     if missing:
         failed += 1
         print(f"FAIL  coverage: no scenario produces {', '.join(missing)}")

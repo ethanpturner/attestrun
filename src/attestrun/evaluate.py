@@ -24,6 +24,9 @@ from attestrun.verdict import Verdict
 class ScenarioScore:
     slug: str
     problems: list[str] = field(default_factory=list)
+    #: The verdict the tool actually produced. Coverage is scored from this rather than from the
+    #: registry's declared string, which would check a YAML file against itself.
+    observed_overall: str = ""
 
     @property
     def passed(self) -> bool:
@@ -64,13 +67,26 @@ def score_scenario(scenario: Path, slug: str) -> ScenarioScore:
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "tree"
         shutil.copytree(scenario / "tree", work)
-        mutation = (scenario / "mutate.sh").read_text().strip()
+        mutation_file = scenario / "mutate.sh"
+        # evaluation-plan.md documents an absent mutate.sh as "verify as-is"; an unconditional
+        # read_text raised FileNotFoundError instead, so the documented affordance never worked.
+        mutation = mutation_file.read_text().strip() if mutation_file.exists() else ""
         if mutation:
-            subprocess.run(
-                mutation, cwd=work, shell=True, check=True, capture_output=True, text=True
+            completed = subprocess.run(
+                mutation, cwd=work, shell=True, check=False, capture_output=True, text=True
             )
+            if completed.returncode != 0:
+                # check=True raised straight out of score_scenario, past the per-scenario
+                # reporting, so one bad mutation killed the whole run and the operator saw a
+                # traceback rather than which scenario failed and why.
+                result.problems.append(
+                    f"mutation failed (exit {completed.returncode}): "
+                    f"{(completed.stderr or completed.stdout).strip()[:200]}"
+                )
+                return result
         actual = verify(manifest, work)
 
+    result.observed_overall = actual.overall.value
     if actual.overall.value != expected.get("overall"):
         result.problems.append(f"overall {actual.overall.value} != {expected.get('overall')}")
     if "result" in expected and actual.result_verdict.value != expected["result"]:

@@ -12,9 +12,10 @@ Keep tense discipline: present indicative for what runs, "is designed to" for an
 
 ## Binding constraints
 
-- **The verdict vocabulary is defined here** (DEC-001) — `verified`, `contradicted`,
-  `unverifiable` — and `whence` and `tearline` are intended to adopt it from this package rather
-  than keep local copies.
+- **The verdict vocabulary is defined here for this project's own output** (DEC-001) —
+  `verified`, `contradicted`, `unverifiable`. **The siblings do not adopt it**: each declares its
+  own, and the agreement is documented rather than imported. DEC-001 was amended to say so, and
+  this line previously restated the sentence that amendment retracted.
 - **Inputs bind by content digest, never by name** (DEC-002).
 - **Verification works offline, with no credential** (DEC-003). A network interaction a run made is
   a recorded input like any other.
@@ -28,7 +29,12 @@ Keep tense discipline: present indicative for what runs, "is designed to" for an
 
 ## Working norms
 
-- **mypy is strict.** The quality gate is `uv run ruff check . && uv run mypy && uv run pytest`.
+- **mypy is strict and covers `scripts/` too.** The quality gate is
+  `uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest`, plus
+  `uv run attestrun evaluate`.
+- **A scenario is registered in `benchmarks/scenarios.yaml` or it is not part of the set**, and its
+  `expects` is checked against the verdict the tool actually produced.
+- **`expected.yaml` is read only by the scorer, never by the tool.**
 - **No runtime dependencies.** A verification tool that drags in a dependency tree is a verification
   tool nobody can audit. Keep it that way, or argue for the exception in the decision log.
 - **Test the negative paths before trusting a check.** Every guard here has a test that makes it
@@ -42,3 +48,7 @@ assertion. [`trace`](https://github.com/ethanpturner/trace) is where the distinc
 (its DEC-009), [`whence`](https://github.com/ethanpturner/whence) applies it to model provenance,
 [`tearline`](https://github.com/ethanpturner/tearline) to retrieval entitlements, and this to the
 evaluation results the others produce.
+
+## Journal
+
+`journal/YYYY-MM-DD-short-slug.md`, one file per session. Record the reasoning, not the diff.

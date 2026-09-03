@@ -13,7 +13,7 @@ carrying an unknown value is refused rather than parsed optimistically.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `format` | str | yes | `attestrun/1`. A foreign value is refused at load. |
+| `format` | str | yes | `attestrun/1`. A foreign value is refused at load; no other field is validated there, so a manifest missing `command` or `result` raises rather than being refused cleanly. |
 | `recorded_at` | str | yes | UTC, second precision. |
 | `scope` | str | yes | What the manifest claims, in prose (DEC-005). Present so a reader need not infer the strength of the claim. |
 | `claim` | str | yes | What the run is asserted to show. Author-supplied. |
@@ -29,7 +29,7 @@ carrying an unknown value is refused rather than parsed optimistically.
 |---|---|---|---|
 | `path` | str | yes | Relative to the working directory. |
 | `sha256` | str \| null | yes | `null` when the file could not be read at record time — never a placeholder digest. |
-| `size` | int | yes | |
+| `size` | int | yes | Recorded for a reader. Not used as a pre-check and not compared. |
 
 ## 3. `Result`
 
@@ -60,5 +60,12 @@ wins, and `unverifiable` outranks `contradicted`** (DEC-004).
 - **`environment` is recorded and never compared.** It is advisory context; comparing it would make
   every manifest fail on a different interpreter patch release, and DEC-007 states the limit rather
   than pretending to close it.
-- **The verifier reports what it checked**, including the input patterns, so a reader can see the
-  bound on coverage rather than inferring completeness.
+- **The verifier reports what it checked**, including the input patterns and the scope, so a reader
+  can see the bound on coverage rather than inferring completeness.
+- **Verification re-globs `input_patterns`.** A file added after recording that the declared globs
+  cover is `contradicted`. Iterating only the recorded list would bound coverage by the files that
+  existed at record time, which is narrower than the bound DEC-007 states.
+- **A manifest with no inputs is `unverifiable`.** An empty digest chain is not a pass, and an
+  unmatched glob — what a typo in `--input` produces — must not verify.
+- **A `null` digest is `unverifiable`, never `contradicted`.** Nothing was digested, so nothing can
+  disagree.

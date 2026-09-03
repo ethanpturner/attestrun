@@ -93,3 +93,31 @@ def test_a_changed_exit_status_still_contradicts(tmp_path: Path) -> None:
     manifest = record(work, "true", ["benchmarks/**/*.yaml"], "c")
     manifest["command"] = "false"
     assert verify(manifest, work).result_verdict is Verdict.CONTRADICTED
+
+
+def test_a_null_recorded_digest_is_unverifiable(tmp_path: Path) -> None:
+    """data-model.md §5 says a synthetic value would compare unequal and report `contradicted` for
+    a file that was simply unreadable. `None` compared unequal, which is the same defect."""
+    work = _project(tmp_path)
+    manifest = record(work, "echo hello", ["benchmarks/**/*.yaml"], "c")
+    manifest["inputs"][0]["sha256"] = None
+    result = verify(manifest, work, rerun=False)
+    assert [c.verdict for c in result.inputs] == [Verdict.UNVERIFIABLE]
+
+
+def test_a_manifest_with_no_inputs_is_not_a_pass(tmp_path: Path) -> None:
+    """An empty digest chain is not a pass. An unmatched glob is what a `--input` typo produces."""
+    work = _project(tmp_path)
+    manifest = record(work, "echo hello", ["benchmarks/**/*.yaml"], "c")
+    manifest["inputs"] = []
+    assert verify(manifest, work).overall is Verdict.UNVERIFIABLE
+
+
+def test_a_file_added_under_a_declared_pattern_contradicts(tmp_path: Path) -> None:
+    """DEC-007 bounds coverage by the declared globs. Iterating only the recorded list bounds it by
+    the files that existed at record time, which is narrower than the stated bound."""
+    work = _project(tmp_path)
+    manifest = record(work, "echo hello", ["benchmarks/**/*.yaml"], "c")
+    (work / "benchmarks" / "added.yaml").write_text("b: 2\n")
+    result = verify(manifest, work, rerun=False)
+    assert Verdict.CONTRADICTED in [c.verdict for c in result.inputs]

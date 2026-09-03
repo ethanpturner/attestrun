@@ -39,3 +39,28 @@ def test_scoring_does_not_modify_the_corpus() -> None:
     for entry in ENTRIES:
         score_scenario(ROOT / entry["path"], entry["slug"])
     assert {p: p.read_bytes() for p in before} == before
+
+
+def test_coverage_is_scored_from_observed_verdicts() -> None:
+    """The registry's `expects` is a declared string; scoring coverage from it would check a YAML
+    file against itself, which the evaluation plan names as the likeliest way this ships broken."""
+    for entry in ENTRIES:
+        result = score_scenario(ROOT / entry["path"], entry["slug"])
+        assert result.observed_overall == entry["expects"], (
+            f"{entry['slug']}: registry says {entry['expects']}, tool produced "
+            f"{result.observed_overall}"
+        )
+
+
+def test_a_failing_mutation_is_a_scenario_failure_not_a_crash(tmp_path: Path) -> None:
+    """check=True raised past the per-scenario reporting, so one bad mutation killed the run and
+    the operator saw a traceback instead of which scenario failed."""
+    import shutil
+
+    source = ROOT / str(ENTRIES[0]["path"])
+    scenario = tmp_path / "s"
+    shutil.copytree(source, scenario)
+    (scenario / "mutate.sh").write_text("exit 3\n")
+    result = score_scenario(scenario, "broken")
+    assert not result.passed
+    assert any("mutation failed" in p for p in result.problems)

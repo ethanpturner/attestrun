@@ -1,8 +1,11 @@
 # Decision log
 
 **Document version:** 0.1
-**Status:** Proposed
 **Last updated:** 2026-09-03
+
+This document carries no status line of its own. It had one reading `Status: Proposed`, three lines
+above the rule below, which is exactly the contradiction the rule exists to prevent — the word means
+something specific here and nothing on a decision log should say it.
 
 Every entry is Accepted or Rejected. Numbering is local to this repository.
 
