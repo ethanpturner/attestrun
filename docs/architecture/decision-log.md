@@ -26,6 +26,23 @@ the thing that produces them.
 **Tradeoffs.** `whence` and `tearline` acquire a dependency on this package. That is acceptable only
 while this package stays small and has no dependencies of its own worth arguing about.
 
+**Amended 2026-09-03 — the siblings do NOT adopt it.** This entry originally said `whence` and
+`tearline` were "intended to adopt it from here rather than keep local copies". On reflection that
+was the wrong call, and stating an intention I no longer hold is worse than either choice.
+
+Three reasons. **Standalone legibility**: a reader cloning `whence` to see how model provenance is
+verified should not need a second repository to run it, and three enum values are a poor price for
+that. **The agreement is the point**: four projects independently declaring the same three verdicts
+demonstrates that the distinction generalises, and hiding it behind an import makes it invisible in
+exactly the place a reader would look for it. **Coupling direction**: `attestrun` verifies the
+others' runs, so a dependency from them to it points the wrong way — the verifier should not be a
+build-time requirement of the thing it verifies.
+
+What this repository owns is the definition *for its own output*. The vocabulary is shared by
+agreement and documented in each project's data model, not by a package boundary. If a fourth
+consumer appears with behaviour to share rather than three words, that is a different argument and
+gets a new entry.
+
 ---
 
 ## DEC-002 — A manifest binds inputs by content digest, never by name
