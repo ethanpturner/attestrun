@@ -152,3 +152,41 @@ have caught the case above, since the stale bytecode was inside `.venv`.
 **Open questions.** Whether to record an environment fingerprint — interpreter build, installed
 package versions — as a separate advisory section. It would have caught this instance. It would also
 grow without bound, and most of it does not affect most results.
+
+---
+
+## DEC-008 — A differing output does not contradict; a differing exit status does
+
+**Date:** 2026-09-03
+**Status:** Accepted
+
+**Decision.** On re-execution, the **exit status** is the determinative signal. If it differs, the
+result is `contradicted`. If it matches but the output digest differs, the result is
+`unverifiable`, with the detail naming non-reproducibility as the reason. Only an identical exit
+status *and* an identical output digest yields `verified`.
+
+**Why — found by wiring this project's own CI.** The first self-attestation recorded
+`uv run pytest -q` and then verified it. The suite passed both times and the verification reported
+**`contradicted`**, because pytest prints `28 passed in 0.14s` and the duration changes on every
+run.
+
+That is a false positive of exactly the kind this project exists to prevent, produced by the
+project. Worse than a missed detection: it would tell an operator that a passing, unchanged suite
+had failed verification, and the more real commands a manifest covers the more often it would fire,
+since most embed a duration, a temporary path, or an iteration order.
+
+**Why `unverifiable` and not a pass.** Differing output does not establish that the claim holds
+either. The command may genuinely have changed behaviour in a way the exit status does not capture.
+The honest reading is that re-execution neither confirmed nor refuted the recorded result, which is
+the third value's whole purpose.
+
+**Alternatives considered.** Normalising output before digesting — stripping timings and paths.
+Rejected: normalisation rules are command-specific and unbounded, and every rule is a place the tool
+silently discards a real difference. Also considered recording a required output *pattern* instead
+of a digest, which is a genuinely useful feature and a different one; it would let an author state
+what part of the output carries the claim, and it needs its own design.
+
+**What this costs.** A manifest over a nondeterministic command can no longer reach `verified` on
+its result axis, however many times it is re-run. That is accurate rather than unfortunate: the
+tool's strong guarantee has always been the input digest chain, and the output comparison is only as
+strong as the command's determinism.

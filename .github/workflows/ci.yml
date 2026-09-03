@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Every uv invocation asserts the lockfile is current instead of silently updating it.
+env:
+  UV_LOCKED: "1"
+
+jobs:
+  ci:
+    name: lint / typecheck / test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # gitleaks scans full history.
+          fetch-depth: 0
+          # Nothing here pushes; dropping the token keeps a compromised step from writing.
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        id: install
+        run: uv sync --locked --all-groups
+
+      # Each check runs even when an earlier one failed, so one run reports every problem. They
+      # are gated on the install rather than on `!cancelled()` alone, because `uv run` would
+      # otherwise build its own environment and report green on top of a broken install.
+      - name: ruff check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run ruff check --output-format=github .
+
+      - name: ruff format
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run ruff format --check --diff .
+
+      - name: mypy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run mypy
+
+      - name: pytest
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run pytest -q
+
+      # The tool's own claims, exercised end to end in a clean environment. A verification tool
+      # that has only ever returned `verified` has not been tested, so each verdict is provoked.
+      - name: a deterministic command round-trips to verified
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          uv run attestrun record --command "cat pyproject.toml" --input 'src/**/*.py' \
+            --claim "pyproject.toml has these contents." --out /tmp/det.json
+          uv run attestrun verify /tmp/det.json | tee /tmp/det.txt
+          grep -q -- '-> verified' /tmp/det.txt \
+            || { echo "::error::a deterministic command did not verify"; exit 1; }
+
+      # DEC-008: pytest prints a duration, so its output digest differs on every run. An identical
+      # exit status with differing output is `unverifiable` -- re-execution neither confirmed nor
+      # refuted the result. Reporting `contradicted` there would tell an operator that a passing,
+      # unchanged suite had failed verification, which is how this decision was found.
+      - name: a nondeterministic command is unverifiable, not contradicted
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          uv run attestrun record --command "uv run pytest -q" --input 'src/**/*.py' \
+            --claim "attestrun's own suite passes over these sources." --out /tmp/self.json
+          uv run attestrun verify /tmp/self.json | tee /tmp/nd.txt || true
+          grep -q -- '-> unverifiable' /tmp/nd.txt \
+            || { echo "::error::a nondeterministic command did not report unverifiable"; exit 1; }
+          grep -qE '^ +contradicted +' /tmp/nd.txt \
+            && { echo "::error::a nondeterministic command was reported as contradicted"; exit 1; }
+          echo "output nondeterminism is unverifiable, not a contradiction"
+
+      - name: a moved input contradicts
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          printf '\n# CI perturbation\n' >> src/attestrun/verdict.py
+          uv run attestrun verify /tmp/self.json --no-rerun | tee /tmp/moved.txt || true
+          git checkout -- src/attestrun/verdict.py
+          grep -qE '^ +contradicted +' /tmp/moved.txt \
+            || { echo "::error::a moved input did not produce a contradiction"; exit 1; }
+
+      # DEC-004: absence of the artifact is not evidence the recorded digest was wrong, and
+      # `unverifiable` outranks `contradicted`. This is the precedence rule a verification tool is
+      # most likely to get subtly wrong.
+      #
+      # The manifest deliberately covers docs rather than sources: removing a file under src/ stops
+      # `attestrun` from importing at all, so the check would pass for the wrong reason -- the tool
+      # would not run rather than reporting correctly.
+      - name: a missing input is unverifiable, not contradicted
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          uv run attestrun record --command "true" --input 'docs/**/*.md' \
+            --claim "the architecture documents have these contents." --out /tmp/docs.json
+          mv docs/architecture/decision-log.md /tmp/dl.bak
+          uv run attestrun verify /tmp/docs.json --no-rerun | tee /tmp/missing.txt || true
+          mv /tmp/dl.bak docs/architecture/decision-log.md
+          grep -qE '^ +unverifiable +' /tmp/missing.txt \
+            || { echo "::error::a missing input did not report unverifiable"; exit 1; }
+          grep -qE '^ +contradicted +' /tmp/missing.txt \
+            && { echo "::error::a missing input was reported as contradicted"; exit 1; }
+          echo "a missing input is unverifiable"
+
+      # gitleaks is the enforcement point a local hook cannot provide.
+      - name: gitleaks
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --source . --no-banner --redact
+
+      - name: the built wheel exposes the CLI
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          uv build
+          uv run --isolated --with dist/*.whl attestrun --help

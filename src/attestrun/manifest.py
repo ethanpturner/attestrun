@@ -125,13 +125,24 @@ def verify(manifest: dict[str, Any], workdir: Path, *, rerun: bool = True) -> Ve
     actual = hashlib.sha256(output.encode()).hexdigest()
     expected = manifest["result"]["output_sha256"]
     if completed.returncode != manifest["result"]["exit_status"]:
+        # The exit status is the determinative signal: a command that succeeded and now fails, or
+        # the reverse, is a changed result whatever its output says.
         result.result_verdict = Verdict.CONTRADICTED
         result.result_detail = (
             f"exit status {completed.returncode} != {manifest['result']['exit_status']}"
         )
     elif actual != expected:
-        result.result_verdict = Verdict.CONTRADICTED
-        result.result_detail = f"output digest {actual[:12]} != {str(expected)[:12]}"
+        # DEC-008: differing output with an identical exit status does NOT establish that the
+        # claim is false. Most real commands embed something nondeterministic -- a duration, a
+        # temporary path, an iteration order -- and `pytest` reporting "28 passed in 0.14s" will
+        # digest differently on every run. Calling that `contradicted` would report a passing
+        # suite as a failed verification, which is the false positive this tool exists to avoid.
+        result.result_verdict = Verdict.UNVERIFIABLE
+        result.result_detail = (
+            f"exit status matched; output digest differs ({actual[:12]} != {str(expected)[:12]}). "
+            f"The command's output is not byte-reproducible, so re-execution neither confirms nor "
+            f"refutes the recorded result"
+        )
     else:
         result.result_verdict = Verdict.VERIFIED
         result.result_detail = "command re-executed and produced identical output"
