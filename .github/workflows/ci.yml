@@ -134,6 +134,34 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: uv run attestrun evaluate
 
+      # The portfolio's thesis demonstrated on itself: attest a sibling project's real evaluation
+      # run and re-derive it. Until now this existed only as a manifest in someone's /tmp.
+      #
+      # whence is chosen because its evaluate output is deterministic -- it replays recorded
+      # fixtures with no timings -- so the result axis can reach `verified` rather than the
+      # `unverifiable` that DEC-008 correctly gives anything with a clock in it.
+      - name: attest a sibling project's evaluation run
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/ethanpturner/whence.git /tmp/whence
+          uv run attestrun record \
+            --command "uv run whence evaluate" \
+            --workdir /tmp/whence \
+            --input 'benchmarks/**/*.yaml' --input 'benchmarks/**/*.json' --input 'src/**/*.py' \
+            --claim "whence resolves every recorded scenario in agreement with its authored truth sets, offline and without credentials." \
+            --out /tmp/cross.json
+          uv run attestrun verify /tmp/cross.json --workdir /tmp/whence | tee /tmp/cross.txt
+          grep -q -- '-> verified' /tmp/cross.txt \
+            || { echo "::error::could not re-derive whence's evaluation claim"; exit 1; }
+
+          # And that the chain actually bites across repositories, not just within one.
+          printf '\n# perturbation\n' >> /tmp/whence/benchmarks/scenarios.yaml
+          uv run attestrun verify /tmp/cross.json --workdir /tmp/whence --no-rerun | tee /tmp/cross2.txt || true
+          grep -qE '^ +contradicted +' /tmp/cross2.txt \
+            || { echo "::error::a moved input in the sibling repository was not caught"; exit 1; }
+          echo "attested a sibling project's run, and caught a change to it"
+
       # gitleaks is the enforcement point a local hook cannot provide.
       - name: gitleaks
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
