@@ -128,6 +128,12 @@ jobs:
             && { echo "::error::a missing input was reported as contradicted"; exit 1; }
           echo "a missing input is unverifiable"
 
+      # Every registered scenario, plus the coverage requirement that each of the three verdicts is
+      # produced by at least one of them.
+      - name: benchmark scenarios agree with their expectations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: uv run attestrun evaluate
+
       # gitleaks is the enforcement point a local hook cannot provide.
       - name: gitleaks
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}

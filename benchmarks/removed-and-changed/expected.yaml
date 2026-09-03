@@ -1,0 +1,7 @@
+overall: unverifiable
+inputs:
+  unverifiable: [data/a.txt]
+  contradicted: [data/b.txt]
+result: verified
+why: >-
+  Precedence. One input is unreadable and another moved; unverifiable outranks contradicted (DEC-004), because a run that was not fully checked cannot support the stronger claim that it is wrong.

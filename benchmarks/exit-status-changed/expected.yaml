@@ -1,0 +1,6 @@
+overall: contradicted
+inputs:
+  verified: [data/a.txt, data/b.txt]
+result: contradicted
+why: >-
+  Every input still matches; the command now exits non-zero. The exit status is the determinative signal on re-execution (DEC-008), and this is the only scenario where the result axis alone carries the verdict.

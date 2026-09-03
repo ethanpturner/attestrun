@@ -1,0 +1,6 @@
+overall: verified
+inputs:
+  verified: [data/a.txt, data/b.txt]
+result: verified
+why: >-
+  The tool's own limit, pinned. extra.txt changed and no glob covers it, so the run verifies. That is DEC-007 rather than a defect: no input set can be complete, and a scenario asserting the pass stops the bound being quietly forgotten.

@@ -1,0 +1,6 @@
+overall: verified
+inputs:
+  verified: [data/a.txt, data/b.txt]
+result: verified
+why: >-
+  Nothing moved. The baseline: if this does not verify, no other scenario's result means anything.

@@ -1,0 +1,6 @@
+overall: unverifiable
+inputs:
+  verified: [data/a.txt, data/b.txt]
+result: unverifiable
+why: >-
+  Same exit status, different output. Not a contradiction: most commands embed a duration or a path, and calling that false would report every nondeterministic run as a failed verification (DEC-008). Not a pass either -- the command may genuinely have changed.

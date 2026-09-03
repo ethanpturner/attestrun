@@ -1,0 +1,7 @@
+overall: unverifiable
+inputs:
+  verified: [data/b.txt]
+  unverifiable: [data/a.txt]
+result: verified
+why: >-
+  Absence of the artifact is not evidence the recorded digest was wrong (DEC-004). Reporting contradicted here would assert something the evidence does not support.

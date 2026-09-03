@@ -7,6 +7,7 @@ deferred (DEC-006).
 ```
 uv run attestrun record --command "whence evaluate" --workdir ../whence --out run.json
 uv run attestrun verify run.json --workdir ../whence
+uv run attestrun evaluate        # every benchmark scenario, offline
 ```
 
 ## The problem
@@ -44,6 +45,16 @@ Takes a command that produces an evaluation result, and emits a **run manifest**
 It does not make a non-deterministic run deterministic. It attests **this run**, with these inputs,
 producing this result. A claim that the same command will produce the same result tomorrow is a
 different and much stronger claim, and the manifest says which one it is making (DEC-005).
+
+## How it is evaluated
+
+Seven scenarios, one per mutation class, and a coverage rule: **every verdict must be produced by
+at least one of them**. A verification tool that has only ever returned `verified` has not been
+tested, and that is the most likely way this project ships broken and looks fine.
+
+The scenario worth reading is `change-outside-the-input-set`, which asserts a **pass** for a run
+whose behaviour changed — because the change fell outside the declared input globs. That is not a
+defect. It is the bound DEC-007 states, pinned so it cannot be quietly forgotten.
 
 ## Lineage
 

@@ -1,0 +1,7 @@
+overall: contradicted
+inputs:
+  verified: [data/b.txt]
+  contradicted: [data/a.txt]
+result: verified
+why: >-
+  An input's contents moved, so the manifest's claim about them is false. The command still runs identically, which is why the result axis stays verified -- the two axes are independent and a contradiction on either is enough.

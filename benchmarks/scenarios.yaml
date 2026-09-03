@@ -1,0 +1,45 @@
+# The scenario registry. The harness reads scenarios from this file and never discovers them by
+# scanning directories.
+#
+# The coverage requirement (evaluation-plan.md §3): every verdict must be produced by at least one
+# scenario, and every mutation class by at least one. A verification tool that has only ever
+# returned `verified` has not been tested.
+
+version: 0.1
+scenarios:
+  - slug: unchanged
+    path: benchmarks/unchanged
+    expects: verified
+    measures: the baseline; if this fails no other scenario's result means anything
+
+  - slug: input-contents-changed
+    path: benchmarks/input-contents-changed
+    expects: contradicted
+    measures: an input digest that moved
+
+  - slug: input-removed
+    path: benchmarks/input-removed
+    expects: unverifiable
+    measures: DEC-004 -- absence is not evidence the digest was wrong
+
+  - slug: exit-status-changed
+    path: benchmarks/exit-status-changed
+    expects: contradicted
+    measures: the result axis alone; every input still matches
+
+  - slug: output-changed
+    path: benchmarks/output-changed
+    expects: unverifiable
+    measures: DEC-008 -- differing output with an identical exit status
+
+  - slug: change-outside-the-input-set
+    path: benchmarks/change-outside-the-input-set
+    expects: verified
+    measures: >-
+      DEC-007, the tool's own limit. A file changed, the run verifies, and that is correct because
+      no glob covered it. Pinned so the bound is not quietly forgotten.
+
+  - slug: removed-and-changed
+    path: benchmarks/removed-and-changed
+    expects: unverifiable
+    measures: precedence -- unverifiable outranks contradicted
