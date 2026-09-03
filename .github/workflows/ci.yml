@@ -134,9 +134,13 @@ jobs:
       # a hand-edited manifest disagreeing with its own tree surfaces only as a tool failure.
       - name: the committed manifests match their trees
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        # `--check` compares the fields the tree determines and leaves `recorded_at` and
+        # `environment` alone. Regenerating and diffing instead -- which is what this step did --
+        # demanded that a manifest recorded on macOS reproduce byte for byte on a Linux runner,
+        # which is demanding that a record of a run not record where it ran. It failed for that
+        # reason and not because any scenario had drifted.
         run: |
-          uv run python scripts/build_scenarios.py
-          git diff --exit-code benchmarks/ \
+          uv run python scripts/build_scenarios.py --check \
             || { echo "::error::a committed manifest does not match its tree; re-run scripts/build_scenarios.py"; exit 1; }
 
       # Every registered scenario, plus the coverage requirement that each of the three verdicts is
