@@ -40,6 +40,16 @@ Takes a command that produces an evaluation result, and emits a **run manifest**
 `unverifiable`. An input that has moved is `contradicted`. An input that cannot be read is
 `unverifiable` — never a pass.
 
+## Recording a command that has a first run
+
+Record against a **warm** environment. Many commands print setup output the first time and nothing
+afterwards — `uv run` announces "Installed N packages" on its first invocation in a project — so a
+manifest recorded on the first run captures noise the verifying run cannot reproduce, and the result
+axis comes back `unverifiable` for a command that is perfectly deterministic once warm.
+
+The tool is right to report that: the outputs genuinely differ. The recording was of the wrong
+thing. Run the command once, then record.
+
 ## What it does not do
 
 It does not make a non-deterministic run deterministic. It attests **this run**, with these inputs,

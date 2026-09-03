@@ -145,6 +145,14 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth 1 https://github.com/ethanpturner/whence.git /tmp/whence
+
+          # Warm the sibling's environment BEFORE recording. `uv run` prints "Installed N packages"
+          # on its first invocation in a project and nothing afterwards, so a manifest recorded on
+          # the first run captures environment setup noise that the verifying run cannot reproduce.
+          # The first attempt at this step reported `unverifiable` for exactly that reason -- the
+          # tool was right and the recording was of the wrong thing.
+          (cd /tmp/whence && uv sync --locked --all-groups >/dev/null 2>&1)
+
           uv run attestrun record \
             --command "uv run whence evaluate" \
             --workdir /tmp/whence \
