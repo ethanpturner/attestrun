@@ -1,0 +1,38 @@
+[project]
+name = "attestrun"
+version = "0.1.0"
+description = "Binds an evaluation run's inputs and results into a manifest, and re-derives the claim offline"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Ethan Turner", email = "ethanpturner@gmail.com" }]
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+attestrun = "attestrun:main"
+
+[build-system]
+requires = ["uv_build>=0.12.2,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = ["mypy>=1.18.0", "pytest>=8.4.0", "ruff>=0.14.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config"]
+
+[tool.mypy]
+python_version = "3.14"
+files = ["src", "tests"]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
